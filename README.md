@@ -17,12 +17,28 @@ Unity 프로젝트 간 시스템 이식(sync) 워크플로우를 자동화하는
 
 ## 설치
 
-Claude Code 환경에서:
+Claude Code 환경에서 아래 **세 줄**을 차례로 실행한다:
 
 ```
 /plugin marketplace add juwon-cha-rocketdan/sync-agent-plugin
 /plugin install sync-agent@sync-agent-marketplace
+/reload-plugins
 ```
+
+> ⚠️ **`/reload-plugins`를 빼먹지 말 것** — 설치 직후 이 명령을 실행해야 슬래시 명령이 활성화된다.
+> 안 하면 `/sync`, `/sync-init` 자동완성에 안 뜨거나 "찾을 수 없는 명령어"로 나옴.
+
+### Scope 선택
+
+`/plugin install` 실행 시 어떤 범위로 설치할지 묻는다. 보통 다음을 권장:
+
+| 옵션 | 권장 상황 |
+|------|---------|
+| **User scope** | 모든 폴더·프로젝트에서 `/sync` 사용 (개인 도구로 쓰는 일반적인 케이스) |
+| **Project scope** | 한 repo의 협업자 전원이 같은 플러그인을 공유해야 할 때 (드물게 사용) |
+| **Local scope** | 한 폴더 안에서 격리 테스트용. 다른 폴더로 이동하면 안 보임 |
+
+처음 써본다면 **User scope**가 가장 무난하다.
 
 > `juwon-cha-rocketdan/sync-agent-plugin`는 GitHub의 `owner/repo` 형식.
 > repo가 비공개라면 `git@github.com:owner/repo.git` 또는 로컬 clone 경로를 marketplace add에 전달.
@@ -30,6 +46,18 @@ Claude Code 환경에서:
 설치 후 다음 명령이 슬래시 명령으로 등록된다:
 - `/sync` — 페이즈별 sync 워크플로우
 - `/sync-init` — 프로젝트 컨벤션 자동 감지 + 가이드 생성
+
+### 설치 확인
+
+```
+/plugin list
+```
+→ `sync-agent`가 enabled로 표시되면 정상.
+
+```
+/sync-init --help
+```
+→ 도움말이 뜨면 슬래시 명령 등록 성공.
 
 ---
 
@@ -159,6 +187,17 @@ cd /Users/your.name/projects/YourUnityProject
 ---
 
 ## 트러블슈팅
+
+### Q. 설치는 됐는데 `/sync`, `/sync-init` 명령이 안 보여
+`/reload-plugins`를 실행하지 않은 경우. 한 번 실행하면 등록됨.
+그래도 안 보이면 `/plugin list`로 `sync-agent`가 enabled인지 확인. disabled면 `/plugin enable sync-agent`.
+
+### Q. 플러그인 업데이트는 어떻게 받아?
+```
+/plugin update sync-agent
+/reload-plugins
+```
+업데이트 후에도 `/reload-plugins` 한 번 필요.
 
 ### Q. `/sync`가 "phase 파일을 찾을 수 없어"를 출력함
 플러그인이 제대로 설치됐는지 확인: `/plugin list` 후 `sync-agent`가 enabled인지 본다.
