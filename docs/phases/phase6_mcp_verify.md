@@ -1,4 +1,4 @@
-# Phase 6 — 프리팹 싱크 검증 (mcp-unity / 파일 레벨 폴백)
+# Phase 6 — 프리팹 싱크 검증 (유니티 MCP / 로컬 파일 폴백)
 
 ## 입력 파라미터
 - TO_PATH: {to}
@@ -11,7 +11,7 @@
 ## Step 0. 흔히 끊기는 지점 사전 체크리스트 (코드 sync 결선 검증)
 
 > **목적**: Phase 4 코드 sync 완료 후, Phase 5(프리팹) 진입 전에 코드 레벨에서 흔히 발생하는 8가지 결선 누락 패턴을 grep으로 검사한다.
-> **시점**: 컴파일 통과 직후, mcp-unity 검증 전.
+> **시점**: 컴파일 통과 직후, 유니티 MCP 검증 전.
 
 각 체크포인트마다 grep 결과를 확인하고 결과를 표로 정리한다.
 
@@ -143,28 +143,51 @@ grep -n "ESaveDataType\.{System}\|FirebaseKeys\.{SYSTEM}" \
 
 ---
 
-## Step 1. mcp-unity 연결 확인
+## Step 1. 유니티 MCP 감지
 
-`mcp__mcp-unity__get_console_logs` 도구를 호출한다.
+이 프로젝트에 **Unity 에디터를 제어하는 MCP**가 연결돼 있는지 확인한다.
+특정 MCP에 종속되지 말고, 사용 가능한 도구 목록에서 `mcp__<server>__` 접두사 중
+Unity 에디터의 콘솔/씬을 다루는 서버를 찾는다.
 
-- **성공(로그 반환 또는 빈 배열 반환)** → [mcp-unity 경로](#mcp-unity-경로)로 이동
-- **실패(연결 오류 / 도구 없음)** → [파일 레벨 폴백 경로](#파일-레벨-폴백-경로)로 이동
+**현재 알려진 유니티 MCP (둘 중 무엇이든 있으면 사용):**
+
+| MCP | 도구 접두사 | 배포처 |
+|-----|------------|--------|
+| MCP for Unity | `mcp__unityMCP__` | CoplayDev (`com.coplaydev.unity-mcp`) |
+| mcp-unity | `mcp__mcp-unity__` | CoderGamester (`com.gamelovers.mcp-unity`) |
+
+> 도구가 지연 로드(deferred)되는 환경이면, 먼저 ToolSearch 등으로 해당 MCP의
+> 콘솔 조회 도구를 로드한 뒤 호출한다.
+
+**감지 절차:**
+1. 감지된 유니티 MCP의 **콘솔 에러 조회 도구**를 한 번 호출해 본다
+   (아래 [도구 매핑 표](#도구-매핑-표)의 해당 행 참고).
+2. **응답이 오면(로그 또는 빈 결과 반환)** → [유니티 MCP 경로](#유니티-mcp-경로)로 이동.
+3. **유니티 MCP가 없음 / 연결 실패 / 도구 없음** → [로컬 파일 폴백 경로](#로컬-파일-폴백-경로)로 이동.
 
 ---
 
-## mcp-unity 경로
+## 유니티 MCP 경로
+
+### 도구 매핑 표
+
+검증에 필요한 4가지 기능을 감지된 MCP의 실제 도구로 매핑한다.
+절차(Step 2-A ~ 5-A)는 동일하며, **호출 도구만 아래 표에서 골라 쓴다.**
+
+| 기능 | mcp-unity (CoderGamester) | MCP for Unity (CoplayDev, `unityMCP`) |
+|------|---------------------------|----------------------------------------|
+| 콘솔 에러 조회 | `mcp__mcp-unity__get_console_logs` (`logType:"error"`, `includeStackTrace:false`) | `mcp__unityMCP__read_console` (`action:"get"`, `types:["error"]`, `include_stacktrace:false`, `format:"plain"`) |
+| 재컴파일/리프레시 | `mcp__mcp-unity__recompile_scripts` | `mcp__unityMCP__refresh_unity` (`scope:"scripts"`, `compile:"request"`, `wait_for_ready:true`) |
+| 게임오브젝트 확인 | `mcp__mcp-unity__get_gameobject` (`target:` 오브젝트명) | `mcp__unityMCP__find_gameobjects` (`search_method:"by_name"`, `search_term:` 오브젝트명) → 반환 id로 `mcpforunity://scene/gameobject/{id}/components` 리소스 조회 |
+| 씬 계층/정보 | `mcp__mcp-unity__get_scene_info` | `mcp__unityMCP__manage_scene` (`action:"get_hierarchy"`) |
+
+> 표에 없는 MCP라면, 같은 4기능에 대응하는 도구를 그 MCP의 도구 목록에서 찾아 동일 절차로 진행한다.
+> 아래 Step 2-A~5-A에서 "콘솔 조회 도구", "재컴파일 도구" 등으로 부르는 것은 모두 이 표의 행을 가리킨다.
 
 ### Step 2-A. 재컴파일 실행
 
-```
-mcp__mcp-unity__recompile_scripts
-```
-
-재컴파일 요청 후 콘솔 로그를 다시 조회한다:
-
-```
-mcp__mcp-unity__get_console_logs
-```
+매핑 표의 **재컴파일/리프레시 도구**를 호출한 뒤,
+**콘솔 에러 조회 도구**로 로그를 다시 조회한다.
 
 ### Step 3-A. 로그 분석
 
@@ -199,25 +222,23 @@ The referenced script on this Behaviour is missing
    - GUID 교체 누락 → 해당 GUID를 TO에서 역추적해 교체
    - 에셋 복사 누락 → FROM에서 복사 후 저장
    - LocalizeStringEvent 구조 불완전 → Phase 5-B Step 6-C 절차 재수행
-4. 수정 후 `mcp__mcp-unity__recompile_scripts` 재실행 → 로그 재확인
+4. 수정 후 **재컴파일/리프레시 도구** 재실행 → **콘솔 조회 도구**로 로그 재확인
 
 ### Step 5-A. 씬 정보 교차 확인 (선택)
 
 sync된 프리팹이 현재 열려있는 씬에 배치된 경우,
-`mcp__mcp-unity__get_scene_info`로 해당 오브젝트의 실제 컴포넌트 목록을 확인한다.
-
-```
-mcp__mcp-unity__get_gameobject  (target: sync된 프리팹 루트 오브젝트명)
-```
+매핑 표의 **씬 계층/정보 도구**로 씬 구조를 확인하고,
+**게임오브젝트 확인 도구**(target: sync된 프리팹 루트 오브젝트명)로
+해당 오브젝트의 실제 컴포넌트 목록을 조회한다.
 
 반환된 컴포넌트 목록과 리포트의 예상 컴포넌트 목록이 일치하면 ✅.
 
 ---
 
-## 파일 레벨 폴백 경로
+## 로컬 파일 폴백 경로
 
-> mcp-unity 없이 파일 시스템만으로 검증한다.
-> Unity Editor가 열려 있지 않거나 mcp-unity가 설치되지 않은 경우에 실행된다.
+> 유니티 MCP 없이 Claude가 파일 시스템만으로 직접 검증한다.
+> 프로젝트에 유니티 MCP가 없거나, Unity Editor가 닫혀 있어 연결되지 않는 경우에 실행된다.
 
 ### Step 2-B. 리포트에서 sync된 프리팹 목록 읽기
 
@@ -290,8 +311,8 @@ done
 # {system} 프리팹 검증 리포트
 
 ## 검증 방식
-- [ ] mcp-unity (Unity Editor 연결)
-- [ ] 파일 레벨 폴백
+- [ ] 유니티 MCP (Unity Editor 연결) — 사용한 MCP: {unityMCP / mcp-unity / 기타}
+- [ ] 로컬 파일 폴백
 
 ## 검증 결과
 
@@ -313,7 +334,7 @@ done
 (없으면 생략)
 
 ### 🟡 기존 에러 (sync 무관)
-(mcp-unity 경로에서만 기록. 없으면 생략)
+(유니티 MCP 경로에서만 기록. 없으면 생략)
 ```
 
 ---
@@ -321,7 +342,7 @@ done
 ## 완료 보고 형식
 
 ```
-## Phase 6 결과 ({검증 방식: mcp-unity | 파일 레벨 폴백})
+## Phase 6 결과 ({검증 방식: 유니티 MCP(사용한 MCP명) | 로컬 파일 폴백})
 
 - Step 0 사전 체크리스트: 8/8 ✅ / N건 ⚠️ ({⚠️ 항목 요약})
 - 검증 프리팹: N개
@@ -333,7 +354,7 @@ done
 ⚠️ 아래 항목은 Unity Editor에서 직접 확인이 필요해:
   - {항목 목록}
 
-{파일 레벨 폴백으로 실행된 경우에만 아래 팁을 추가:}
-💡 Unity Editor를 열고 mcp-unity를 연결하면 재컴파일 + 콘솔 에러를 자동 검증할 수 있어.
-   설치: GitHub에서 "CoderGamester/mcp-unity" 검색 → 프로젝트의 .mcp.json.example 참고
+{로컬 파일 폴백으로 실행된 경우에만 아래 팁을 추가:}
+💡 Unity Editor를 열고 유니티 MCP를 연결하면 재컴파일 + 콘솔 에러를 자동 검증할 수 있어.
+   대표 MCP: MCP for Unity(CoplayDev, `com.coplaydev.unity-mcp`) / mcp-unity(CoderGamester, `com.gamelovers.mcp-unity`).
 ```

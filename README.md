@@ -153,7 +153,7 @@ cd /Users/your.name/projects/YourUnityProject
 | 5-A | 가져올 프리팹 목록 생성 (재귀 스캔) |
 | 5-B | 프리팹 자동 sync (GUID 교체·LocalizeStringEvent 처리) |
 | 5-C | 기존 프리팹 패치 (미리보기 + 확인) |
-| 6 | sync 검증 (mcp-unity 또는 파일 레벨 폴백 + 8개 결선 체크리스트) |
+| 6 | sync 검증 (유니티 MCP 또는 로컬 파일 폴백 + 8개 결선 체크리스트) |
 
 각 페이즈는 독립적으로 실행 가능. 페이즈 완료 후 `/clear`로 컨텍스트 정리해도 상태 파일이 남아 `/sync` 재실행 시 이어서 진행됨.
 
