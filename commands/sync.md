@@ -64,7 +64,7 @@ cat "$STATE_DIR/.sync_state.json" 2>/dev/null || echo "NO_STATE"
 --cleanup            sync 완료 후 임시 worktree 정리
 ```
 
-`--cancel` 플래그가 있는 경우 → [취소 처리](#공통--취소-처리)로 이동
+`--cancel` 플래그가 있는 경우 → **취소 처리**: `${CLAUDE_PLUGIN_ROOT}/docs/branches/cancel.md`를 Read해서 그 절차를 따른다 (없으면 위 페이즈 문서와 동일한 폴백 순서로 `docs/branches/cancel.md` 탐색)
 `--plan` 플래그가 있는 경우 → [플랜 파일 검증](#공통--플랜-파일-검증)으로 이동
 그 외 → [FROM 검증](#공통--from-검증)으로 이동
 
@@ -249,71 +249,10 @@ with open('$STATE_DIR/.sync_state.json', 'w') as f:
 
 ## 공통 — 취소 처리
 
-`--cancel` 플래그가 있거나, 페이즈 실행 중 사용자가 "중단해줘" / "취소해줘" 라고 말한 경우.
+`--cancel` 플래그가 있거나, 페이즈 실행 중 사용자가 "중단해줘" / "취소해줘" 라고 말한 경우에만 진행한다.
 
-### 1. 상태 파일 확인
-```bash
-SYNC_BASE=$([ -d "$HOME/Documents/obsidian_vault" ] && echo "$HOME/Documents/obsidian_vault/Sync" || echo "$HOME/Downloads/Sync")
-cat "$SYNC_BASE/$(basename {TO_PATH})/.sync_state.json" 2>/dev/null || echo "NO_STATE"
-```
-
-상태 파일이 없으면:
-```
-현재 진행 중인 sync 작업이 없어.
-```
-
-### 2. 변경된 파일 목록 출력
-
-```bash
-cd "{TO_PATH}" && git diff --name-only HEAD
-```
-
-아래 형식으로 출력:
-```
-🛑 sync 작업 취소
-
-완료된 페이즈: {completed_phases 목록}
-마지막 진행: Phase {next_phase}
-
-변경된 파일 목록:
-  - Assets/...파일명.cs
-  - Assets/...파일명.prefab
-  - ...
-
-어떻게 처리할까?
-  r → 변경사항 전체 되돌리기 (git checkout -- .)
-  k → 변경사항 유지하고 상태 파일만 삭제
-  a → 취소 중단 (sync 계속 진행)
-```
-
-### 3. 선택에 따른 처리
-
-**r 선택 (변경사항 되돌리기):**
-```bash
-SYNC_BASE=$([ -d "$HOME/Documents/obsidian_vault" ] && echo "$HOME/Documents/obsidian_vault/Sync" || echo "$HOME/Downloads/Sync")
-cd "{TO_PATH}" && git checkout -- .
-rm "$SYNC_BASE/$(basename {TO_PATH})/.sync_state.json"
-```
-완료 후:
-```
-✅ 변경사항이 모두 되돌려졌어. sync 작업 전 상태로 복원됐어.
-```
-
-**k 선택 (상태 파일만 삭제):**
-```bash
-SYNC_BASE=$([ -d "$HOME/Documents/obsidian_vault" ] && echo "$HOME/Documents/obsidian_vault/Sync" || echo "$HOME/Downloads/Sync")
-rm "$SYNC_BASE/$(basename {TO_PATH})/.sync_state.json"
-```
-완료 후:
-```
-✅ 상태 파일을 삭제했어. 변경된 파일은 그대로 유지돼.
-나중에 /sync 로 새 sync 작업을 시작할 수 있어.
-```
-
-**a 선택 (취소 중단):**
-```
-계속 진행할게. Phase {next_phase}부터 이어서 진행하려면 "다음 페이즈" 라고 말해줘.
-```
+→ **상세 절차는 `${CLAUDE_PLUGIN_ROOT}/docs/branches/cancel.md`를 Read해서 따른다.** (상태 파일 확인 → 변경 파일 목록 → r/k/a 선택 처리)
+이 분기는 대부분의 sync 흐름에서 사용되지 않으므로 본문에 인라인하지 않고 필요 시점에만 로드한다 (상시 컨텍스트 절약).
 
 ---
 
@@ -483,21 +422,15 @@ print('권한 추가 완료:', to_add)
 ### 3. 요약 출력
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  ✅  sync 설정 확인                                   │
-├─────────────────────────────────────────────────────┤
-│  FROM    : {from}                                    │
-│  (로컬)  : Phase 0에서 확정 예정                      │
-│  TO      : {to}                                      │
-│  System  : {system}                                  │
-│  Keywords: {keys}                                    │
-│  Phase   : 0~{phase}                                 │
-│  Output  : {OUTPUT_DIR}                              │
-│  권한 방식: {선택한 옵션}                              │
-│                                                      │
-│  💾 설정이 자동 저장됨                                │
-│     /clear 후 /sync 재실행 시 이어서 진행 가능        │
-└─────────────────────────────────────────────────────┘
+✅ sync 설정 확인
+   FROM     : {from}  (로컬 경로는 Phase 0에서 확정)
+   TO       : {to}
+   System   : {system}
+   Keywords : {keys}
+   Phase    : 0~{phase}
+   Output   : {OUTPUT_DIR}
+   권한 방식 : {선택한 옵션}
+   💾 설정 자동 저장됨 — /clear 후 /sync 재실행 시 이어서 진행 가능
 
 "시작" 이라고 말하면 Phase 0부터 진행할게.
 수정하고 싶은 항목이 있으면 알려줘.
@@ -525,16 +458,33 @@ print('권한 추가 완료:', to_add)
    ```
    subagent_type: general-purpose
    prompt: [페이즈 문서 전체] + 아래 파라미터:
-     FROM        = {from}             ← 원본 입력값 (remote URL/브랜치/로컬 경로)
-     FROM_LOCAL  = {from_local}       ← Phase 0에서 확정된 실제 로컬 경로
-     TO_PATH     = {to}
-     SYSTEM      = {system}
-     KEYS        = {keys}
-     OUTPUT_DIR  = {output_dir}       ← 산출물 저장 경로 (상태 파일의 output_dir 값)
+     FROM         = {from}            ← 원본 입력값 (remote URL/브랜치/로컬 경로)
+     FROM_LOCAL   = {from_local}      ← Phase 0에서 확정된 실제 로컬 경로
+     TO_PATH      = {to}
+     SYSTEM       = {system}
+     KEYS         = {keys}
+     OUTPUT_DIR   = {output_dir}      ← 산출물 저장 경로 (상태 파일의 output_dir 값)
+     PREV_REPORTS = {직전 페이즈 미니요약의 HANDOFF 경로들, 없으면 빈값}
    ```
    > Phase 1 이후 파일 탐색은 FROM_LOCAL을 사용한다.
+   > PREV_REPORTS가 비어있지 않으면, 서브에이전트는 **작업 시작 전 그 경로들을 Read**해서 직전 페이즈 결과를 확보한다 (핸드오프).
 
-3. Agent가 반환한 요약 결과를 사용자에게 보고한다.
+   **반환 규칙 (컨텍스트 절약 — 모든 페이즈 공통):**
+   - 페이즈 문서의 "완료 보고 형식"에 해당하는 **전체 표·상세 보고는 `{output_dir}/phase{N}_report.md`에 Write로 저장**한다 (메인 컨텍스트로 반환하지 않는다).
+   - 메인 오케스트레이터에는 **아래 고정 미니요약만 반환**한다 (장황한 마크다운 표 반환 금지):
+     ```
+     PHASE: {N}
+     STATUS: ok | blocked
+     REPORT: {output_dir}/phase{N}_report.md
+     SUMMARY: {핵심 결과 1~3줄}
+     COUNTS: {페이즈별 핵심 수치, 예: files=37, partial=2, blockers=0}
+     BLOCKERS: {있으면 목록, 없으면 none}
+     HANDOFF: {다음 페이즈가 Read해야 할 산출물 경로 목록 (report 포함)}
+     ```
+   - 전체 표를 디스크로 옮기는 것이지 **버리는 게 아니다.** 다음 페이즈가 HANDOFF 경로를 Read해 동일 정보를 소비하므로 정보 손실이 없다.
+
+3. Agent가 반환한 **미니요약**을 사용자에게 보고한다. 상세 표가 필요하면 그때 REPORT 경로의 파일을 Read한다.
+   다음 페이즈를 디스패치할 때 직전 미니요약의 HANDOFF 경로를 위 PREV_REPORTS로 전달한다.
 
 4. 상태 파일을 업데이트한다:
    ```bash
@@ -566,7 +516,7 @@ print('권한 추가 완료:', to_add)
 
 6. 사용자가 "중단해줘" 또는 "취소해줘" 라고 말한 경우:
    Agent 실행 중이라면 현재 Agent가 완료된 후 처리한다.
-   완료 후 [취소 처리](#공통--취소-처리)로 이동한다.
+   완료 후 **취소 처리**(`${CLAUDE_PLUGIN_ROOT}/docs/branches/cancel.md`를 Read)로 이동한다.
 
 ### 페이즈 순서 및 문서 매핑
 
@@ -592,52 +542,7 @@ Phase 3 완료 시 아래 안내 출력:
 
 ## 도움말
 
-```
-사용법:
-  /sync
-      순차 대화형 마법사 시작 (또는 이전 작업 이어서 진행)
+사용자가 `/sync --help` 또는 사용법을 물어볼 때만 진행한다.
 
-  /sync --from <소스> --system <이름> --keys <키워드,...>
-      TO는 현재 프로젝트 자동 감지, Phase는 대화로 선택
-
-  /sync --from <소스> --to <경로> --system <이름> --keys <키워드,...> --phase <4|5a|5b|5c>
-      모든 값 지정, 즉시 실행
-
-  /sync --cancel
-      진행 중인 sync 작업 취소. 변경사항 되돌리기 또는 상태 파일만 삭제 선택 가능.
-
-  /sync --cleanup
-      sync 완료 후 임시 worktree 정리.
-
---from 예시:
-  로컬 경로:     --from /Volumes/repo/BunkerDefense
-  remote 브랜치: --from origin/temp-bunker
-  remote URL:   --from git@github.com:TeamSparta/BunkerDefense.git
-  URL + 브랜치:  --from git@github.com:TeamSparta/BunkerDefense.git --branch develop
-
-전체 예시:
-  # 기본 (전체 분석 + 산출물 자동 저장)
-  /sync --from origin/temp-bunker \
-        --system BattlePass \
-        --keys BattlePassManager,BattlePassTypes,BattlePass \
-        --phase 5a
-  # → 산출물: ~/Documents/obsidian_vault/Sync/2026-05-03_BattlePass/
-  #           (obsidian 없으면 ~/Downloads/Sync/2026-05-03_BattlePass/)
-
-  # 기존 분석 문서 활용 (Phase 1~3 스킵, 토큰 절약)
-  /sync --from origin/temp-bunker \
-        --system BattlePass \
-        --plan ~/Documents/obsidian_vault/Sync/2026-05-03_BattlePass/BattlePass_SYNC_PLAN.md \
-        --phase 4
-
-  # 출력 경로 직접 지정 (폴백 없이 항상 이 경로 사용)
-  /sync --from origin/temp-bunker \
-        --system BattlePass \
-        --keys BattlePassManager,BattlePassTypes \
-        --output ~/Downloads/Sync/2026-05-03_BattlePass \
-        --phase 5a
-
-💡 컨텍스트 절약 팁:
-   각 페이즈 완료 후 /clear 를 실행해도 설정이 보존돼.
-   /sync 를 다시 실행하면 중단된 페이즈부터 이어서 진행해.
-```
+→ **사용법·플래그·예시는 `${CLAUDE_PLUGIN_ROOT}/docs/branches/help.md`를 Read해서 그대로 출력한다.**
+이 도움말은 평상시 sync 흐름에서 사용되지 않으므로 본문에 인라인하지 않고 필요 시점에만 로드한다 (상시 컨텍스트 절약).
